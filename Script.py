@@ -17,23 +17,65 @@ logger.setLevel("DEBUG")
 
 """
 TODO: Auto top up fruits
-TODO: Auto combine keys
 """
 
 
-def getImagePosition(image: str):
+def getImagePosition(image: str, confidence=0.9, grayscale=True):
     try:
-        pos = pyautogui.locateCenterOnScreen(image, confidence=0.9, grayscale=True)
+        pos = pyautogui.locateCenterOnScreen(
+            image, confidence=confidence, grayscale=grayscale
+        )
         return pos
     except pyautogui.ImageNotFoundException:
         return None
 
 
-def moveAndClick(pos):
+def moveAndClick(pos: pyautogui.Point):
     if pos != None:
         x, y = pos
         autoit.mouse_move(x, y)
         autoit.mouse_click("left")
+    else:
+        raise RuntimeError("Failed to click.")
+
+
+def hitOk():
+    ok_pos = getImagePosition(OK_IMG)
+    if ok_pos != None:
+        logger.info("Ok prompt found. Hitting ok.")
+        moveAndClick(ok_pos)
+
+
+def useEventItem(eventItemPosition: pyautogui.Point, displayStr: str):
+    logger.info(f"Found {displayStr} in inventory. Using {displayStr}.")
+    moveAndClick(eventItemPosition)
+
+    time.sleep(1)
+
+    hitOk()
+
+
+def openItem(itemPosition: pyautogui.Point, itemImageString: str, displayStr: str):
+    while itemPosition != None:
+        logger.info(f"Found a {displayStr} in inventory. Opening {displayStr}.")
+        moveAndClick(itemPosition)
+        autoit.mouse_move(0, 0)
+        itemPosition = getImagePosition(itemImageString)
+
+
+def createKey(keyPartPosition: pyautogui.Point, keyType: str):
+    logger.info(f"Upper and lower {keyType} found. Creating a {keyType}.")
+    moveAndClick(keyPartPosition)
+
+    time.sleep(1)
+
+    logger.info("Clicking yes on key creation prompt.")
+    yesPromptPosition = getImagePosition(YES_IMG)
+    moveAndClick(yesPromptPosition)
+
+    time.sleep(1)
+
+    hitOk()
 
 
 def farm(config: Config):
@@ -42,11 +84,12 @@ def farm(config: Config):
 
     while ENABLE_SCRIPT:
         try:
-            ok_pos = getImagePosition(OK_IMG)
-            if ok_pos != None:
-                logger.info("Error found. Closing the error.")
-                moveAndClick(ok_pos)
-                continue
+            if True not in set(vars(config).values()):
+                logger.info(
+                    "Script started without any script functionalities enabled. Ending script."
+                )
+                ENABLE_SCRIPT = False
+                break
 
             items_pos = getImagePosition(ITEMS_IMG)
             if items_pos == None:
@@ -57,41 +100,47 @@ def farm(config: Config):
 
             moveAndClick(items_pos)
 
-            lucky_block_pos = getImagePosition(LUCKY_BLOCK_IMG)
-            if lucky_block_pos != None and config.OPEN_LUCKY_BLOCKS:
-                logger.info("Found a lucky block in inventory. Using lucky block.")
-                moveAndClick(lucky_block_pos)
-                continue
-
-            pinata_pos = getImagePosition(PINATA_IMG)
-            if pinata_pos != None and config.OPEN_PINATAS:
-                logger.info("Found a pinata in inventory. Using pinata.")
-                moveAndClick(pinata_pos)
-                continue
-
-            large_gift_bag_pos = getImagePosition(LARGE_GIFT_BAG_IMG)
-            while large_gift_bag_pos != None and config.OPEN_LARGE_GIFT_BAGS:
-                logger.info(
-                    "Found a large gift bag in inventory. Opening large gift bag."
-                )
-                moveAndClick(large_gift_bag_pos)
-                autoit.mouse_move(0, 0)
-                large_gift_bag_pos = getImagePosition(LARGE_GIFT_BAG_IMG)
-
-            small_gift_bag_pos = getImagePosition(SMALL_GIFT_BAG_IMG)
-            while small_gift_bag_pos != None and config.OPEN_SMALL_GIFT_BAGS:
-                logger.info(
-                    "Found a small gift bag in inventory. Opening small gift bag."
-                )
-                moveAndClick(small_gift_bag_pos)
-                autoit.mouse_move(0, 0)
-                small_gift_bag_pos = getImagePosition(SMALL_GIFT_BAG_IMG)
-
-            party_box_pos = getImagePosition(PARTY_BOX_IMG)
-            if party_box_pos != None and config.OPEN_PARTY_BOXES:
-                logger.info("Found a party box in inventory. Using party box.")
-                moveAndClick(party_box_pos)
-                continue
+            if (
+                config.CREATE_SECRET_KEYS
+                and getImagePosition(SECRET_KEY_LOWER_IMG) != None
+                and (secretKeyUpperPosition := getImagePosition(SECRET_KEY_UPPER_IMG))
+                != None
+            ):
+                createKey(secretKeyUpperPosition, SECRET_KEY)
+            elif (
+                config.CREATE_CRYSTAL_KEYS
+                and getImagePosition(CRYSTAL_KEY_LOWER_IMG) != None
+                and (crystalKeyUpperPosition := getImagePosition(CRYSTAL_KEY_UPPER_IMG))
+                != None
+            ):
+                createKey(crystalKeyUpperPosition, CRYSTAL_KEY)
+            elif (
+                config.OPEN_LARGE_GIFT_BAGS
+                and (largeGiftBagPosition := getImagePosition(LARGE_GIFT_BAG_IMG))
+                != None
+            ):
+                openItem(largeGiftBagPosition, LARGE_GIFT_BAG_IMG, LARGE_GIFT_BAG)
+            elif (
+                config.OPEN_SMALL_GIFT_BAGS
+                and (smallGiftBagPosition := getImagePosition(SMALL_GIFT_BAG_IMG))
+                != None
+            ):
+                openItem(smallGiftBagPosition, SMALL_GIFT_BAG_IMG, SMALL_GIFT_BAG)
+            elif (
+                config.OPEN_LUCKY_BLOCKS
+                and (luckyBlockPosition := getImagePosition(LUCKY_BLOCK_IMG)) != None
+            ):
+                useEventItem(luckyBlockPosition, LUCKY_BLOCK)
+            elif (
+                config.OPEN_PINATAS
+                and (pinataPosition := getImagePosition(PINATA_IMG)) != None
+            ):
+                useEventItem(pinataPosition, PINATA)
+            elif (
+                config.OPEN_PARTY_BOXES
+                and (partyBoxPosition := getImagePosition(PARTY_BOX_IMG)) != None
+            ):
+                useEventItem(partyBoxPosition, PARTY_BOX)
         finally:
             time.sleep(1)
 
@@ -110,6 +159,10 @@ def setupGUI():
             SimpleGuiUtils.checkbox("Open Small Gift Bags", OPEN_SMALL_GIFT_BAGS),
             SimpleGuiUtils.checkbox("Open Large Gift Bags", OPEN_LARGE_GIFT_BAGS),
         ],
+        [
+            SimpleGuiUtils.checkbox("Create Secret Keys", CREATE_SECRET_KEYS),
+            SimpleGuiUtils.checkbox("Create Crystal Keys", CREATE_CRYSTAL_KEYS),
+        ],
         [sg.Button("Start Script"), sg.Text("Status: Stopped", key=STATUS)],
     ]
     return sg.Window("Pet Simulator 99 Script", layout)
@@ -124,7 +177,7 @@ def runScript(config: Config):
     thread.daemon = True
     thread.start()
 
-    while True:
+    while ENABLE_SCRIPT:
         if keyboard.is_pressed("F1"):
             break
 
@@ -154,3 +207,5 @@ if __name__ == "__main__":
         scriptConfig.OPEN_PARTY_BOXES = values[OPEN_PARTY_BOXES]
         scriptConfig.OPEN_SMALL_GIFT_BAGS = values[OPEN_SMALL_GIFT_BAGS]
         scriptConfig.OPEN_LARGE_GIFT_BAGS = values[OPEN_LARGE_GIFT_BAGS]
+        scriptConfig.CREATE_SECRET_KEYS = values[CREATE_SECRET_KEYS]
+        scriptConfig.CREATE_CRYSTAL_KEYS = values[CREATE_CRYSTAL_KEYS]
