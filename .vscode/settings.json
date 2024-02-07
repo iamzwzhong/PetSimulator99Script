@@ -1,3 +1,9 @@
 {
-  "cSpell.words": ["autoit", "pyautogui", "pydirectinput"]
+  "cSpell.words": [
+    "autoit",
+    "levelname",
+    "pyautogui",
+    "pydirectinput",
+    "timespan"
+  ]
 }
