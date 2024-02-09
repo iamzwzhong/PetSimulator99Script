@@ -1,7 +1,9 @@
+from enum import auto
 import logging
 import os
 import threading
 from tkinter import NO
+from venv import EnvBuilder
 import pyautogui
 import time
 import autoit
@@ -25,6 +27,9 @@ logger.setLevel("DEBUG")
 
 """
 TODO: Auto top up fruits
+TODO: Enable/disable logs
+TODO: Load/save config
+TODO: Do rank quests
 """
 
 
@@ -97,6 +102,21 @@ def createKey(keyPartPosition: pyautogui.Point, keyType: str):
     hitOk()
 
 
+def repeatClickIfImageExists(imageToCheck: str, imageToClick: str, msgStr: str):
+
+    global ENABLE_SCRIPT
+
+    imageExists = getImagePosition(imageToCheck)
+    while imageExists == None and ENABLE_SCRIPT:
+        item = getImagePosition(imageToClick)
+        if item == None:
+            autoit.mouse_wheel("down", 10)
+        else:
+            moveAndClick(item)
+            logger.info(msgStr)
+        imageExists = getImagePosition(imageToCheck)
+
+
 def farm(config: Config):
 
     global ENABLE_SCRIPT
@@ -164,10 +184,8 @@ def farm(config: Config):
                     "Unclaimed rank rewards have been detected. Attempting to claim."
                 )
                 moveAndClick(rankRewardsPosition)
-                rankRewardsScrollPosition = getImagePosition(
-                    RANK_REWARDS_SCROLL_IMG, grayscale=False
-                )
-                move(rankRewardsScrollPosition)
+                scrollPosition = getImagePosition(SCROLL_IMG, grayscale=False)
+                move(scrollPosition)
                 while rankRewardsPosition != None and ENABLE_SCRIPT:
                     rankRewardsClaimPosition = getImagePosition(CLAIM_RANK_REWARD_IMG)
                     if rankRewardsClaimPosition == None:
@@ -190,6 +208,47 @@ def farm(config: Config):
                 continue
 
             moveAndClick(items_pos)
+
+            if config.MAX_FRUIT_BOOSTS and (
+                (orangeBoostPosition := getImagePosition(MAX_ORANGE_BOOST_IMG)) == None
+                or (bananaBoostPosition := getImagePosition(MAX_BANANA_BOOST_IMG))
+                == None
+                or (appleBoostPosition := getImagePosition(MAX_APPLE_BOOST_IMG)) == None
+                or (pineappleBoostPosition := getImagePosition(MAX_PINEAPPLE_BOOST_IMG))
+                == None
+                or (
+                    rainbowFruitBoostPosition := getImagePosition(
+                        MAX_RAINBOW_FRUIT_BOOST_IMG
+                    )
+                )
+                == None
+            ):
+                scrollPosition = getImagePosition(SCROLL_IMG, grayscale=False)
+                move(scrollPosition)
+                if orangeBoostPosition == None:
+                    repeatClickIfImageExists(
+                        MAX_ORANGE_BOOST_IMG, ORANGE_IMG, "Using an orange boost."
+                    )
+                elif bananaBoostPosition == None:
+                    repeatClickIfImageExists(
+                        MAX_BANANA_BOOST_IMG, BANANA_IMG, "Using a banana boost."
+                    )
+                elif appleBoostPosition == None:
+                    repeatClickIfImageExists(
+                        MAX_APPLE_BOOST_IMG, APPLE_IMG, "Using an apple boost."
+                    )
+                elif pineappleBoostPosition == None:
+                    repeatClickIfImageExists(
+                        MAX_PINEAPPLE_BOOST_IMG,
+                        PINEAPPLE_IMG,
+                        "Using a pineapple boost.",
+                    )
+                elif rainbowFruitBoostPosition == None:
+                    repeatClickIfImageExists(
+                        MAX_RAINBOW_FRUIT_BOOST_IMG,
+                        RAINBOW_FRUIT_IMG,
+                        "Using a rainbow fruit.",
+                    )
 
             if (
                 config.CREATE_SECRET_KEYS
@@ -257,6 +316,7 @@ def setupGUI():
         ],
         [
             SimpleGuiUtils.checkbox("Create Secret Keys", CREATE_SECRET_KEYS),
+            SimpleGuiUtils.checkbox("Max Fruit Boosts", MAX_FRUIT_BOOSTS),
         ],
         [sg.Text("Rewards", font=HEADER_FONT)],
         [
@@ -278,6 +338,7 @@ def updateAllSettings(window, boolean):
     window[CREATE_CRYSTAL_KEYS].update(boolean)
     window[OPEN_FREE_GIFTS].update(boolean)
     window[OPEN_RANK_REWARDS].update(boolean)
+    window[MAX_FRUIT_BOOSTS].update(boolean)
 
 
 def runScript(config: Config):
@@ -328,3 +389,4 @@ if __name__ == "__main__":
         scriptConfig.CREATE_CRYSTAL_KEYS = values[CREATE_CRYSTAL_KEYS]
         scriptConfig.OPEN_FREE_GIFTS = values[OPEN_FREE_GIFTS]
         scriptConfig.OPEN_RANK_REWARDS = values[OPEN_RANK_REWARDS]
+        scriptConfig.MAX_FRUIT_BOOSTS = values[MAX_FRUIT_BOOSTS]
