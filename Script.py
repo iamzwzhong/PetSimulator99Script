@@ -1,3 +1,4 @@
+import datetime
 from enum import auto
 import logging
 import os
@@ -10,6 +11,7 @@ import autoit
 import keyboard
 import PySimpleGUI as sg
 from Constants import *
+from RuntimeVariables import RuntimeVariables
 import SimpleGuiUtils
 
 from Config import Config
@@ -102,6 +104,18 @@ def createKey(keyPartPosition: pyautogui.Point, keyType: str):
     hitOk()
 
 
+def scrollToItem(itemImage: str):
+
+    global ENABLE_SCRIPT
+
+    item = getImagePosition(itemImage)
+    while item == None and ENABLE_SCRIPT:
+        autoit.mouse_wheel("down", 10)
+        time.sleep(1)
+        item = getImagePosition(itemImage)
+    return item
+
+
 def repeatClickIfImageExists(imageToCheck: str, imageToClick: str, msgStr: str):
 
     global ENABLE_SCRIPT
@@ -120,6 +134,8 @@ def repeatClickIfImageExists(imageToCheck: str, imageToClick: str, msgStr: str):
 def farm(config: Config):
 
     global ENABLE_SCRIPT
+
+    runtimeVariables = RuntimeVariables()
 
     while ENABLE_SCRIPT:
         try:
@@ -209,46 +225,33 @@ def farm(config: Config):
 
             moveAndClick(items_pos)
 
-            if config.MAX_FRUIT_BOOSTS and (
-                (orangeBoostPosition := getImagePosition(MAX_ORANGE_BOOST_IMG)) == None
-                or (bananaBoostPosition := getImagePosition(MAX_BANANA_BOOST_IMG))
-                == None
-                or (appleBoostPosition := getImagePosition(MAX_APPLE_BOOST_IMG)) == None
-                or (pineappleBoostPosition := getImagePosition(MAX_PINEAPPLE_BOOST_IMG))
-                == None
-                or (
-                    rainbowFruitBoostPosition := getImagePosition(
-                        MAX_RAINBOW_FRUIT_BOOST_IMG
-                    )
+            if config.MAX_FRUIT_BOOSTS:
+                currentTime = datetime.datetime.now()
+                secondsSinceLastFruitBoost = (
+                    None
+                    if runtimeVariables.fruitBoostTimer == None
+                    else (
+                        currentTime - runtimeVariables.fruitBoostTimer
+                    ).total_seconds()
                 )
-                == None
-            ):
-                scrollPosition = getImagePosition(SCROLL_IMG, grayscale=False)
-                move(scrollPosition)
-                if orangeBoostPosition == None:
-                    repeatClickIfImageExists(
-                        MAX_ORANGE_BOOST_IMG, ORANGE_IMG, "Using an orange boost."
-                    )
-                elif bananaBoostPosition == None:
-                    repeatClickIfImageExists(
-                        MAX_BANANA_BOOST_IMG, BANANA_IMG, "Using a banana boost."
-                    )
-                elif appleBoostPosition == None:
-                    repeatClickIfImageExists(
-                        MAX_APPLE_BOOST_IMG, APPLE_IMG, "Using an apple boost."
-                    )
-                elif pineappleBoostPosition == None:
-                    repeatClickIfImageExists(
-                        MAX_PINEAPPLE_BOOST_IMG,
-                        PINEAPPLE_IMG,
-                        "Using a pineapple boost.",
-                    )
-                elif rainbowFruitBoostPosition == None:
-                    repeatClickIfImageExists(
-                        MAX_RAINBOW_FRUIT_BOOST_IMG,
-                        RAINBOW_FRUIT_IMG,
-                        "Using a rainbow fruit.",
-                    )
+                if (
+                    runtimeVariables.fruitBoostTimer == None
+                    or secondsSinceLastFruitBoost >= 300
+                ):
+                    scrollPosition = getImagePosition(SCROLL_IMG, grayscale=False)
+                    fruitToImageDict = {
+                        "Orange": ORANGE_IMG,
+                        "Apple": APPLE_IMG,
+                        "Banana": BANANA_IMG,
+                        "Pineapple": PINEAPPLE_IMG,
+                        "Rainbow Fruit": RAINBOW_FRUIT_IMG,
+                    }
+                    for fruit, fruitImage in fruitToImageDict.items():
+                        move(scrollPosition)
+                        fruitPosition = scrollToItem(fruitImage)
+                        openItem(fruitPosition, fruitImage, fruit)
+                        hitOk()
+                    runtimeVariables.fruitBoostTimer = datetime.datetime.now()
 
             if (
                 config.CREATE_SECRET_KEYS
