@@ -1,10 +1,8 @@
 import datetime
-from enum import auto
 import logging
+from Logger import logger
 import os
 import threading
-from tkinter import NO
-from venv import EnvBuilder
 import pyautogui
 import time
 import autoit
@@ -13,25 +11,10 @@ import PySimpleGUI as sg
 from Constants import *
 from RuntimeVariables import RuntimeVariables
 import SimpleGuiUtils
-
 from Config import Config
 
-# Setup logging for script
-if not os.path.exists(LOGS_FOLDER):
-    os.makedirs(LOGS_FOLDER)
-currentTime = time.time()
-newLogFile = time.strftime("%Y-%m-%d_%H%M%S", time.localtime(currentTime)) + ".log"
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(message)s", filename="logs/" + newLogFile
-)
-logger = logging.getLogger()
-logger.setLevel("DEBUG")
-
 """
-TODO: Auto top up fruits
-TODO: Enable/disable logs
 TODO: Load/save config
-TODO: Do rank quests
 """
 
 
@@ -116,22 +99,23 @@ def scrollToItem(itemImage: str):
     return item
 
 
-def repeatClickIfImageExists(imageToCheck: str, imageToClick: str, msgStr: str):
-
-    global ENABLE_SCRIPT
-
-    imageExists = getImagePosition(imageToCheck)
-    while imageExists == None and ENABLE_SCRIPT:
-        item = getImagePosition(imageToClick)
-        if item == None:
-            autoit.mouse_wheel("down", 10)
-        else:
-            moveAndClick(item)
-            logger.info(msgStr)
-        imageExists = getImagePosition(imageToCheck)
-
-
 def farm(config: Config):
+
+    if config.SAVE_LOGS:
+        if not os.path.exists(LOGS_FOLDER):
+            os.makedirs(LOGS_FOLDER)
+        currentTime = time.time()
+        newLogFile = "logs/" + (
+            time.strftime("%Y-%m-%d_%H%M%S", time.localtime(currentTime)) + ".log"
+        )
+        logFormat = "%(asctime)s %(levelname)s %(message)s"
+        logFormatter = logging.Formatter(logFormat)
+        fileHandler = logging.FileHandler(newLogFile)
+        fileHandler.setFormatter(logFormatter)
+        logger.handlers.pop()
+        logger.addHandler(fileHandler)
+
+    logger.info("Starting auto farm script.")
 
     global ENABLE_SCRIPT
 
@@ -173,12 +157,16 @@ def farm(config: Config):
                         moveAndClick(freeGiftType1Position)
                         logger.info("Opened free gift type 1.")
                     elif (
-                        freeGiftType2Position := getImagePosition(REDEEM_GIFT_2_IMG)
+                        freeGiftType2Position := getImagePosition(
+                            REDEEM_GIFT_2_IMG, grayscale=False
+                        )
                     ) != None:
                         moveAndClick(freeGiftType2Position)
                         logger.info("Opened free gift type 2.")
                     elif (
-                        freeGiftType3Position := getImagePosition(REDEEM_GIFT_3_IMG)
+                        freeGiftType3Position := getImagePosition(
+                            REDEEM_GIFT_3_IMG, grayscale=False
+                        )
                     ) != None:
                         moveAndClick(freeGiftType3Position)
                         logger.info("Opened free gift type 3.")
@@ -225,7 +213,13 @@ def farm(config: Config):
 
             moveAndClick(items_pos)
 
-            if config.MAX_FRUIT_BOOSTS:
+            if (
+                config.MAX_APPLE_BOOSTS
+                or config.MAX_BANANA_BOOSTS
+                or config.MAX_ORANGE_BOOSTS
+                or config.MAX_PINEAPPLE_BOOSTS
+                or config.MAX_RAINBOW_FRUITS_BOOSTS
+            ):
                 currentTime = datetime.datetime.now()
                 secondsSinceLastFruitBoost = (
                     None
@@ -239,18 +233,26 @@ def farm(config: Config):
                     or secondsSinceLastFruitBoost >= 300
                 ):
                     scrollPosition = getImagePosition(SCROLL_IMG, grayscale=False)
+                    fruitToUseFruitFlag = {
+                        ORANGES: config.MAX_ORANGE_BOOSTS,
+                        APPLES: config.MAX_APPLE_BOOSTS,
+                        BANANAS: config.MAX_BANANA_BOOSTS,
+                        PINEAPPLES: config.MAX_PINEAPPLE_BOOSTS,
+                        RAINBOW_FRUITS: config.MAX_RAINBOW_FRUITS_BOOSTS,
+                    }
                     fruitToImageDict = {
-                        "Orange": ORANGE_IMG,
-                        "Apple": APPLE_IMG,
-                        "Banana": BANANA_IMG,
-                        "Pineapple": PINEAPPLE_IMG,
-                        "Rainbow Fruit": RAINBOW_FRUIT_IMG,
+                        ORANGES: ORANGE_IMG,
+                        APPLES: APPLE_IMG,
+                        BANANAS: BANANA_IMG,
+                        PINEAPPLES: PINEAPPLE_IMG,
+                        RAINBOW_FRUITS: RAINBOW_FRUIT_IMG,
                     }
                     for fruit, fruitImage in fruitToImageDict.items():
-                        move(scrollPosition)
-                        fruitPosition = scrollToItem(fruitImage)
-                        openItem(fruitPosition, fruitImage, fruit)
-                        hitOk()
+                        if fruitToUseFruitFlag.get(fruit):
+                            move(scrollPosition)
+                            fruitPosition = scrollToItem(fruitImage)
+                            openItem(fruitPosition, fruitImage, fruit)
+                            hitOk()
                     runtimeVariables.fruitBoostTimer = datetime.datetime.now()
 
             if (
@@ -299,32 +301,122 @@ def farm(config: Config):
             ENABLE_SCRIPT = False
         finally:
             time.sleep(1)
+    logger.info("Stopping script.")
 
 
 def setupGUI():
-    logger.info("Initializing GUI.")
     sg.theme("DarkAmber")
     layout = [
-        [sg.Button(SELECT_ALL), sg.Button(SELECT_NONE)],
-        [sg.Text("Item Usage", font=HEADER_FONT)],
+        [sg.Text("Script Settings", font=HEADER_FONT)],
         [
-            SimpleGuiUtils.checkbox("Open Lucky Blocks", OPEN_LUCKY_BLOCKS),
-            SimpleGuiUtils.checkbox("Open Pinatas", OPEN_PINATAS),
-            SimpleGuiUtils.checkbox("Open Party Boxes", OPEN_PARTY_BOXES),
+            sg.Checkbox(
+                "Save Logs",
+                key=SAVE_LOGS,
+                enable_events=True,
+                default=False,
+            ),
+            sg.FolderBrowse(
+                initial_folder=os.getcwd(),
+                enable_events=True,
+                disabled=True,
+                key=BROWSE_LOGS_FOLDER,
+            ),
         ],
         [
-            SimpleGuiUtils.checkbox("Open Small Gift Bags", OPEN_SMALL_GIFT_BAGS),
-            SimpleGuiUtils.checkbox("Open Large Gift Bags", OPEN_LARGE_GIFT_BAGS),
-            SimpleGuiUtils.checkbox("Create Crystal Keys", CREATE_CRYSTAL_KEYS),
+            sg.Frame(
+                "Item Usage",
+                [
+                    [sg.Button(SELECT_ALL), sg.Button(SELECT_NONE)],
+                    [
+                        SimpleGuiUtils.checkbox("Open Lucky Blocks", OPEN_LUCKY_BLOCKS),
+                        SimpleGuiUtils.checkbox("Open Pinatas", OPEN_PINATAS),
+                    ],
+                    [
+                        SimpleGuiUtils.checkbox(
+                            "Open Small Gift Bags", OPEN_SMALL_GIFT_BAGS
+                        ),
+                        SimpleGuiUtils.checkbox(
+                            "Open Large Gift Bags", OPEN_LARGE_GIFT_BAGS
+                        ),
+                    ],
+                    [
+                        SimpleGuiUtils.checkbox(
+                            "Create Crystal Keys", CREATE_CRYSTAL_KEYS
+                        ),
+                        SimpleGuiUtils.checkbox(
+                            "Create Secret Keys", CREATE_SECRET_KEYS
+                        ),
+                    ],
+                    [
+                        SimpleGuiUtils.checkbox("Open Party Boxes", OPEN_PARTY_BOXES),
+                    ],
+                ],
+                font=HEADER_FONT,
+            )
         ],
         [
-            SimpleGuiUtils.checkbox("Create Secret Keys", CREATE_SECRET_KEYS),
-            SimpleGuiUtils.checkbox("Max Fruit Boosts", MAX_FRUIT_BOOSTS),
+            sg.Frame(
+                "Fruit Boosts",
+                [
+                    [sg.Button(SELECT_ALL_FRUITS), sg.Button(SELECT_NO_FRUITS)],
+                    [
+                        sg.Checkbox(
+                            "Oranges",
+                            key=ORANGES,
+                            enable_events=True,
+                            default=True,
+                            size=10,
+                        ),
+                        sg.Checkbox(
+                            "Apples",
+                            key=APPLES,
+                            enable_events=True,
+                            default=True,
+                            size=10,
+                        ),
+                    ],
+                    [
+                        sg.Checkbox(
+                            "Pineapples",
+                            key=PINEAPPLES,
+                            enable_events=True,
+                            default=True,
+                            size=10,
+                        ),
+                        sg.Checkbox(
+                            "Bananas",
+                            key=BANANAS,
+                            enable_events=True,
+                            default=True,
+                            size=10,
+                        ),
+                    ],
+                    [
+                        sg.Checkbox(
+                            "Rainbow Fruits",
+                            key=RAINBOW_FRUITS,
+                            enable_events=True,
+                            default=True,
+                            size=16,
+                        ),
+                    ],
+                ],
+                font=HEADER_FONT,
+            ),
         ],
-        [sg.Text("Rewards", font=HEADER_FONT)],
         [
-            SimpleGuiUtils.checkbox("Open Free Gifts", OPEN_FREE_GIFTS),
-            SimpleGuiUtils.checkbox("Open Rank Rewards", OPEN_RANK_REWARDS),
+            sg.Frame(
+                "Rewards",
+                [
+                    [
+                        SimpleGuiUtils.checkbox("Open Free Gifts", OPEN_FREE_GIFTS),
+                    ],
+                    [
+                        SimpleGuiUtils.checkbox("Open Rank Rewards", OPEN_RANK_REWARDS),
+                    ],
+                ],
+                font=HEADER_FONT,
+            ),
         ],
         [sg.Button(START_SCRIPT), sg.Text("Status: Stopped", key=STATUS)],
     ]
@@ -339,9 +431,14 @@ def updateAllSettings(window, boolean):
     window[OPEN_LARGE_GIFT_BAGS].update(boolean)
     window[CREATE_SECRET_KEYS].update(boolean)
     window[CREATE_CRYSTAL_KEYS].update(boolean)
-    window[OPEN_FREE_GIFTS].update(boolean)
-    window[OPEN_RANK_REWARDS].update(boolean)
-    window[MAX_FRUIT_BOOSTS].update(boolean)
+
+
+def updateFruitBoostSettings(window, boolean):
+    window[APPLES].update(boolean)
+    window[ORANGES].update(boolean)
+    window[PINEAPPLES].update(boolean)
+    window[BANANAS].update(boolean)
+    window[RAINBOW_FRUITS].update(boolean)
 
 
 def runScript(config: Config):
@@ -358,7 +455,6 @@ def runScript(config: Config):
             logger.info("Received input to stop script.")
             break
 
-    logger.info("Stopping script.")
     ENABLE_SCRIPT = False
 
 
@@ -372,7 +468,6 @@ if __name__ == "__main__":
         if event == sg.WIN_CLOSED:
             break
         elif event == START_SCRIPT:
-            logger.info("Starting script.")
             window[STATUS].update(value="Status: Started")
             window.refresh()
             runScript(scriptConfig)
@@ -382,6 +477,12 @@ if __name__ == "__main__":
             updateAllSettings(window, True)
         elif event == SELECT_NONE:
             updateAllSettings(window, False)
+        elif event == SELECT_ALL_FRUITS:
+            updateFruitBoostSettings(window, True)
+        elif event == SELECT_NO_FRUITS:
+            updateFruitBoostSettings(window, False)
+
+        scriptConfig.SAVE_LOGS = values[SAVE_LOGS]
 
         scriptConfig.OPEN_LUCKY_BLOCKS = values[OPEN_LUCKY_BLOCKS]
         scriptConfig.OPEN_PINATAS = values[OPEN_PINATAS]
@@ -390,6 +491,15 @@ if __name__ == "__main__":
         scriptConfig.OPEN_LARGE_GIFT_BAGS = values[OPEN_LARGE_GIFT_BAGS]
         scriptConfig.CREATE_SECRET_KEYS = values[CREATE_SECRET_KEYS]
         scriptConfig.CREATE_CRYSTAL_KEYS = values[CREATE_CRYSTAL_KEYS]
+
+        scriptConfig.MAX_BANANA_BOOSTS = values[BANANAS]
+        scriptConfig.MAX_APPLE_BOOSTS = values[APPLES]
+        scriptConfig.MAX_PINEAPPLE_BOOSTS = values[PINEAPPLES]
+        scriptConfig.MAX_ORANGE_BOOSTS = values[ORANGES]
+        scriptConfig.MAX_RAINBOW_FRUITS_BOOSTS = values[RAINBOW_FRUITS]
+
         scriptConfig.OPEN_FREE_GIFTS = values[OPEN_FREE_GIFTS]
         scriptConfig.OPEN_RANK_REWARDS = values[OPEN_RANK_REWARDS]
-        scriptConfig.MAX_FRUIT_BOOSTS = values[MAX_FRUIT_BOOSTS]
+
+        if values[SAVE_LOGS] == True:
+            window[BROWSE_LOGS_FOLDER].update(disabled=False)

@@ -11,7 +11,12 @@ class Config:
         create_crystal_keys=True,
         open_free_gifts=True,
         open_rank_rewards=True,
-        max_fruit_boosts=True,
+        max_orange_boosts=True,
+        max_banana_boosts=True,
+        max_apple_boosts=True,
+        max_pineapple_boosts=True,
+        max_rainbow_fruits_boosts=True,
+        save_logs=False,
     ):
         self.OPEN_LUCKY_BLOCKS = open_lucky_blocks
         self.OPEN_PARTY_BOXES = open_party_boxes
@@ -22,4 +27,9 @@ class Config:
         self.CREATE_CRYSTAL_KEYS = create_crystal_keys
         self.OPEN_FREE_GIFTS = open_free_gifts
         self.OPEN_RANK_REWARDS = open_rank_rewards
-        self.MAX_FRUIT_BOOSTS = max_fruit_boosts
+        self.MAX_ORANGE_BOOSTS = max_orange_boosts
+        self.MAX_APPLE_BOOSTS = max_apple_boosts
+        self.MAX_BANANA_BOOSTS = max_banana_boosts
+        self.MAX_PINEAPPLE_BOOSTS = max_pineapple_boosts
+        self.MAX_RAINBOW_FRUITS_BOOSTS = max_rainbow_fruits_boosts
+        self.SAVE_LOGS = save_logs
