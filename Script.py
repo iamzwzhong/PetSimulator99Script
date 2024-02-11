@@ -93,20 +93,38 @@ def scrollToItem(itemImage: str):
 
     item = getImagePosition(itemImage)
     while item == None and ENABLE_SCRIPT:
-        autoit.mouse_wheel("down", 10)
+        autoit.mouse_wheel("down", 5)
         time.sleep(1)
         item = getImagePosition(itemImage)
     return item
 
 
-def farm(config: Config):
+def farm(config: Config, runtimeVariables: RuntimeVariables):
+
+    global ENABLE_SCRIPT
+
+    # Check what is enabled in the script configuration. If there is nothing enabled,
+    # the script will not do anything so there is no point in running.
+    if True not in set(vars(config).values()):
+        logger.info(
+            "Script started without any script functionalities enabled. Stopping script."
+        )
+        ENABLE_SCRIPT = False
+        return
 
     if config.SAVE_LOGS:
-        if not os.path.exists(LOGS_FOLDER):
-            os.makedirs(LOGS_FOLDER)
+        logsFolder = (
+            LOGS_FOLDER
+            if runtimeVariables.logsFolder == None
+            else runtimeVariables.logsFolder
+        )
+        if not os.path.exists(logsFolder):
+            os.makedirs(logsFolder)
         currentTime = time.time()
-        newLogFile = "logs/" + (
-            time.strftime("%Y-%m-%d_%H%M%S", time.localtime(currentTime)) + ".log"
+        newLogFile = (
+            logsFolder
+            + "/"
+            + (time.strftime("%Y-%m-%d_%H%M%S", time.localtime(currentTime)) + ".log")
         )
         logFormat = "%(asctime)s %(levelname)s %(message)s"
         logFormatter = logging.Formatter(logFormat)
@@ -117,21 +135,8 @@ def farm(config: Config):
 
     logger.info("Starting auto farm script.")
 
-    global ENABLE_SCRIPT
-
-    runtimeVariables = RuntimeVariables()
-
     while ENABLE_SCRIPT:
         try:
-            # Check what is enabled in the script configuration. If there is nothing enabled,
-            # the script will not do anything so there is no point in running.
-            if True not in set(vars(config).values()):
-                logger.info(
-                    "Script started without any script functionalities enabled. Stopping script."
-                )
-                ENABLE_SCRIPT = False
-                break
-
             if (
                 config.OPEN_FREE_GIFTS
                 and (freeGiftsPosition := getImagePosition(FREE_GIFT_READY_IMG)) != None
@@ -315,6 +320,12 @@ def setupGUI():
                 enable_events=True,
                 default=False,
             ),
+            sg.InputText(
+                readonly=True,
+                disabled_readonly_background_color="black",
+                enable_events=True,
+                key=LOGS_FOLDER_INPUT,
+            ),
             sg.FolderBrowse(
                 initial_folder=os.getcwd(),
                 enable_events=True,
@@ -441,12 +452,12 @@ def updateFruitBoostSettings(window, boolean):
     window[RAINBOW_FRUITS].update(boolean)
 
 
-def runScript(config: Config):
+def runScript(config: Config, runtimeVariables: RuntimeVariables):
 
     global ENABLE_SCRIPT
     ENABLE_SCRIPT = True
 
-    thread = threading.Thread(target=farm, args=[config])
+    thread = threading.Thread(target=farm, args=[config, runtimeVariables])
     thread.daemon = True
     thread.start()
 
@@ -462,6 +473,7 @@ if __name__ == "__main__":
 
     window = setupGUI()
     scriptConfig = Config()
+    runtimeVariables = RuntimeVariables()
 
     while True:
         event, values = window.read()
@@ -470,7 +482,7 @@ if __name__ == "__main__":
         elif event == START_SCRIPT:
             window[STATUS].update(value="Status: Started")
             window.refresh()
-            runScript(scriptConfig)
+            runScript(scriptConfig, runtimeVariables)
             window[STATUS].update(value="Status: Stopped")
             window.refresh()
         elif event == SELECT_ALL:
@@ -481,6 +493,8 @@ if __name__ == "__main__":
             updateFruitBoostSettings(window, True)
         elif event == SELECT_NO_FRUITS:
             updateFruitBoostSettings(window, False)
+        elif event == LOGS_FOLDER_INPUT:
+            runtimeVariables.logsFolder = values[LOGS_FOLDER_INPUT]
 
         scriptConfig.SAVE_LOGS = values[SAVE_LOGS]
 
