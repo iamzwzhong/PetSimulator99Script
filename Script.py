@@ -1,5 +1,7 @@
 import datetime
+import json
 import logging
+from typing import List
 from Logger import logger
 import os
 import threading
@@ -99,6 +101,14 @@ def scrollToItem(itemImage: str):
     return item
 
 
+def pressKeys(keys: List[str], seconds: str):
+    for key in keys:
+        autoit.send(f"{{{key} down}}")
+    time.sleep(seconds)
+    for key in keys:
+        autoit.send(f"{{{key} up}}")
+
+
 def farm(config: Config, runtimeVariables: RuntimeVariables):
 
     global ENABLE_SCRIPT
@@ -133,10 +143,38 @@ def farm(config: Config, runtimeVariables: RuntimeVariables):
         logger.handlers.pop()
         logger.addHandler(fileHandler)
 
+    time.sleep(3)
     logger.info("Starting auto farm script.")
 
     while ENABLE_SCRIPT:
         try:
+            if okPosition := getImagePosition(OK_IMG) != None:
+                moveAndClick(okPosition)
+                continue
+
+            if config.GATHER_ITEMS:
+                currentTime = datetime.datetime.now()
+                secondsSinceLastGather = (
+                    None
+                    if runtimeVariables.gatherItemsTimer == None
+                    else (
+                        currentTime - runtimeVariables.gatherItemsTimer
+                    ).total_seconds()
+                )
+                if (
+                    runtimeVariables.gatherItemsTimer == None
+                    or secondsSinceLastGather >= 60
+                ):
+                    logger.info("Gathering items.")
+                    pressKeys(["w", "d"], 0.75)
+                    pressKeys(["s"], 1.4)
+                    pressKeys(["a"], 1.4)
+                    pressKeys(["w"], 1.4)
+                    pressKeys(["d"], 1.4)
+                    pressKeys(["s", "a"], 0.75)
+                    runtimeVariables.gatherItemsTimer = datetime.datetime.now()
+                    continue
+
             if (
                 config.OPEN_FREE_GIFTS
                 and (freeGiftsPosition := getImagePosition(FREE_GIFT_READY_IMG)) != None
@@ -309,7 +347,7 @@ def farm(config: Config, runtimeVariables: RuntimeVariables):
     logger.info("Stopping script.")
 
 
-def setupGUI():
+def setupGUI(config: Config):
     sg.theme("DarkAmber")
     layout = [
         [sg.Text("Script Settings", font=HEADER_FONT)],
@@ -318,7 +356,7 @@ def setupGUI():
                 "Save Logs",
                 key=SAVE_LOGS,
                 enable_events=True,
-                default=False,
+                default=config.SAVE_LOGS,
             ),
             sg.InputText(
                 readonly=True,
@@ -339,27 +377,61 @@ def setupGUI():
                 [
                     [sg.Button(SELECT_ALL), sg.Button(SELECT_NONE)],
                     [
-                        SimpleGuiUtils.checkbox("Open Lucky Blocks", OPEN_LUCKY_BLOCKS),
-                        SimpleGuiUtils.checkbox("Open Pinatas", OPEN_PINATAS),
-                    ],
-                    [
-                        SimpleGuiUtils.checkbox(
-                            "Open Small Gift Bags", OPEN_SMALL_GIFT_BAGS
+                        sg.Checkbox(
+                            "Open Lucky Blocks",
+                            key=OPEN_LUCKY_BLOCKS,
+                            enable_events=True,
+                            default=config.OPEN_LUCKY_BLOCKS,
+                            size=18,
                         ),
-                        SimpleGuiUtils.checkbox(
-                            "Open Large Gift Bags", OPEN_LARGE_GIFT_BAGS
-                        ),
-                    ],
-                    [
-                        SimpleGuiUtils.checkbox(
-                            "Create Crystal Keys", CREATE_CRYSTAL_KEYS
-                        ),
-                        SimpleGuiUtils.checkbox(
-                            "Create Secret Keys", CREATE_SECRET_KEYS
+                        sg.Checkbox(
+                            "Open Pinatas",
+                            key=OPEN_PINATAS,
+                            enable_events=True,
+                            default=config.OPEN_PINATAS,
+                            size=18,
                         ),
                     ],
                     [
-                        SimpleGuiUtils.checkbox("Open Party Boxes", OPEN_PARTY_BOXES),
+                        sg.Checkbox(
+                            "Open Small Gift Bags",
+                            key=OPEN_SMALL_GIFT_BAGS,
+                            enable_events=True,
+                            default=config.OPEN_SMALL_GIFT_BAGS,
+                            size=18,
+                        ),
+                        sg.Checkbox(
+                            "Open Large Gift Bags",
+                            key=OPEN_LARGE_GIFT_BAGS,
+                            enable_events=True,
+                            default=config.OPEN_LARGE_GIFT_BAGS,
+                            size=18,
+                        ),
+                    ],
+                    [
+                        sg.Checkbox(
+                            "Create Crystal Keys",
+                            key=CREATE_CRYSTAL_KEYS,
+                            enable_events=True,
+                            default=config.CREATE_CRYSTAL_KEYS,
+                            size=18,
+                        ),
+                        sg.Checkbox(
+                            "Create Secret Keys",
+                            key=CREATE_SECRET_KEYS,
+                            enable_events=True,
+                            default=config.CREATE_SECRET_KEYS,
+                            size=18,
+                        ),
+                    ],
+                    [
+                        sg.Checkbox(
+                            "Open Party Boxes",
+                            key=OPEN_PARTY_BOXES,
+                            enable_events=True,
+                            default=config.OPEN_PARTY_BOXES,
+                            size=18,
+                        ),
                     ],
                 ],
                 font=HEADER_FONT,
@@ -375,14 +447,14 @@ def setupGUI():
                             "Oranges",
                             key=ORANGES,
                             enable_events=True,
-                            default=True,
+                            default=config.MAX_ORANGE_BOOSTS,
                             size=10,
                         ),
                         sg.Checkbox(
                             "Apples",
                             key=APPLES,
                             enable_events=True,
-                            default=True,
+                            default=config.MAX_APPLE_BOOSTS,
                             size=10,
                         ),
                     ],
@@ -391,14 +463,14 @@ def setupGUI():
                             "Pineapples",
                             key=PINEAPPLES,
                             enable_events=True,
-                            default=True,
+                            default=config.MAX_PINEAPPLE_BOOSTS,
                             size=10,
                         ),
                         sg.Checkbox(
                             "Bananas",
                             key=BANANAS,
                             enable_events=True,
-                            default=True,
+                            default=config.MAX_BANANA_BOOSTS,
                             size=10,
                         ),
                     ],
@@ -407,7 +479,7 @@ def setupGUI():
                             "Rainbow Fruits",
                             key=RAINBOW_FRUITS,
                             enable_events=True,
-                            default=True,
+                            default=config.MAX_RAINBOW_FRUITS_BOOSTS,
                             size=16,
                         ),
                     ],
@@ -424,6 +496,17 @@ def setupGUI():
                     ],
                     [
                         SimpleGuiUtils.checkbox("Open Rank Rewards", OPEN_RANK_REWARDS),
+                    ],
+                ],
+                font=HEADER_FONT,
+            ),
+        ],
+        [
+            sg.Frame(
+                "Other",
+                [
+                    [
+                        SimpleGuiUtils.checkbox("Gather Items", GATHER_ITEMS),
                     ],
                 ],
                 font=HEADER_FONT,
@@ -469,11 +552,22 @@ def runScript(config: Config, runtimeVariables: RuntimeVariables):
     ENABLE_SCRIPT = False
 
 
+def readConfigFile():
+    try:
+        configJsonFile = open("config.json")
+        config = json.load(configJsonFile)
+        return config
+    except:
+        return None
+
+
 if __name__ == "__main__":
 
-    window = setupGUI()
-    scriptConfig = Config()
+    jsonConfig = readConfigFile()
+    scriptConfig = Config() if jsonConfig == None else Config(**jsonConfig)
     runtimeVariables = RuntimeVariables()
+
+    window = setupGUI(scriptConfig)
 
     while True:
         event, values = window.read()
@@ -497,6 +591,7 @@ if __name__ == "__main__":
             runtimeVariables.logsFolder = values[LOGS_FOLDER_INPUT]
 
         scriptConfig.SAVE_LOGS = values[SAVE_LOGS]
+        scriptConfig.GATHER_ITEMS = values[GATHER_ITEMS]
 
         scriptConfig.OPEN_LUCKY_BLOCKS = values[OPEN_LUCKY_BLOCKS]
         scriptConfig.OPEN_PINATAS = values[OPEN_PINATAS]
@@ -517,3 +612,7 @@ if __name__ == "__main__":
 
         if values[SAVE_LOGS] == True:
             window[BROWSE_LOGS_FOLDER].update(disabled=False)
+
+    jsonString = json.dumps(scriptConfig.__dict__)
+    with open("config.json", "w") as configSave:
+        configSave.write(jsonString)
