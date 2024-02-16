@@ -512,7 +512,11 @@ def setupGUI(config: Config):
                 font=HEADER_FONT,
             ),
         ],
-        [sg.Button(START_SCRIPT), sg.Text("Status: Stopped", key=STATUS)],
+        [
+            sg.Button(START_SCRIPT),
+            sg.Text("Status: Stopped", key=STATUS),
+            sg.Text("Press F1 to interrupt script"),
+        ],
     ]
     return sg.Window("Pet Simulator 99 Script", layout, keep_on_top=True)
 
